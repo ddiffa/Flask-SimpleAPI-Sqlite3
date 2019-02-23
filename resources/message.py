@@ -1,7 +1,22 @@
-from flask import jsonify, Blueprint
-from flask_restful import Resource, Api, reqparse
+from flask import jsonify, Blueprint, abort
+from flask_restful import Resource, Api, reqparse, fields, marshal, marshal_with
 
 import model
+
+message_fileds = {
+    'id': fields.Integer,
+    'content': fields.String,
+    'published_at': fields.String
+}
+
+
+def get_or_abort(id):
+    try:
+        msg = model.Message.get_by_id(id)
+    except model.Message.DoesNotExist:
+        raise abort(404)
+    else:
+        return msg
 
 
 class MessageList(Resource):
@@ -22,27 +37,19 @@ class MessageList(Resource):
         super().__init__()
 
     def get(self):
-        messages = {}
-        query = model.Message.select()
-
-        for row in query:
-            messages[row.id] = {'content': row.content, 'published_at': row.published_at}
-
+        messages = [marshal(message, message_fileds) for message in model.Message.select()]
         return jsonify({'messages': messages})
 
     def post(self):
         args = self.reqparse.parse_args()
-        message = {}
-        row = model.Message.create(**args)
-        message[row.id] = {'content': row.content, 'published_at': row.published_at}
-
-        return jsonify({'messages': message,'success': True })
+        message = model.Message.create(**args)
+        return marshal(message,message_fileds)
 
 
 class Message(Resource):
+    @marshal_with(message_fileds)
     def get(self, id):
-        query = model.Message.get_by_id(id)
-        return jsonify({'content': query.content, 'published_at': query.published_at})
+        return get_or_abort(id)
 
 
 messages_api = Blueprint('resources.message', __name__)
